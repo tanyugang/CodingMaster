@@ -1,12 +1,3 @@
-;***********************************************
-;代码作者：谭玉刚
-;教程链接：
-;
-;不要错过：
-;B站/微信/油管/头条/知乎/大鱼/企鹅：谭玉刚
-;百度/微博：玉刚谈
-;来聊天呀：1054728152（QQ群）
-;***********************************************
 NUL equ 0x00
 SETCHAR equ 0x07
 VIDEOMEM equ 0xb800
@@ -26,9 +17,29 @@ section code align=16 vstart=0
 CodeStart:
   mov ax, [DataSeg]
   mov ds, ax
+  mov ax, [StackSeg]
+  mov ss, ax
+  mov sp, StackEnd
   xor si, si
+  ;mov cx, HelloEnd-Hello
+  call ClearScreen
   call PrintString
   jmp $
+ClearScreen:
+  mov ax, VIDEOMEM
+  mov es, ax
+  xor di, di
+  mov bl, ' '
+  mov bh, SETCHAR
+  mov cx, 2000
+  .putspace:
+  mov [es:di], bl
+  inc di
+  mov [es:di], bh
+  inc di
+  loop .putspace
+  ret
+  ;mov cx, STRINGLEN
 PrintString:
   .setup:
   push ax
@@ -41,41 +52,44 @@ PrintString:
 
   mov bh, SETCHAR
   mov cx, STRINGLEN
-
+  
   .printchar:
   mov bl, [ds:si]
-  or bl, NUL
-  jz .return
+  ;判断并输出回车
   cmp bl, 0x0d
   jz .putCR
+  ;判断并输出换行
   cmp bl, 0x0a
   jz .putLF
+  ;实际输出字符
+  or bl, NUL
+  jz .return
   inc si
   mov [es:di], bl
   inc di
   mov [es:di], bh
-  inc di
+  inc di;2
   call SetCursor
   jmp .loopEnd
-
-  .putCR:
-  mov bl, 160
-  mov ax, di
+  
+  .putCR:;输出回车
+  mov bl, 160;80
+  mov ax, di;10
   div bl
-  shr ax, 8
+  shr ax, 8;10
   sub di, ax
   call SetCursor
   inc si
   jmp .loopEnd
-
-  .putLF:
-  add di, 160
+  .putLF:;输出换行
+  add di, 160;80
   call SetCursor
   inc si
   jmp .loopEnd
-  
+
   .loopEnd:
   loop .printchar
+
   .return:
   mov bx, di
   pop dx
@@ -83,16 +97,45 @@ PrintString:
   pop bx
   pop ax
   ret
+SetCursor:
+  push dx
+  push bx
+  push ax
+  
+  mov ax, di;2
+  mov dx, 0
+  mov bx, 2
+  div bx
+
+  mov bx, ax
+  mov dx, 0x3d4
+  mov al, 0x0e
+  out dx, al
+  mov dx, 0x3d5
+  mov al, bh
+  out dx, al
+  mov dx, 0x3d4
+  mov al, 0x0f
+  out dx, al
+  mov al, bl
+  mov dx, 0x3d5
+  out dx, al
+  pop ax
+  pop bx
+  pop dx
+  ret
+
 section data align=16 vstart=0
   Hello db 'Hello,I come from program on sector 1,loaded by bootloader!'
         db 0x0d, 0x0a
-        db 'Haha, This is a new line!'
+        db 'Haha,This is a new line!'
         db 0x0a
         db 'Just 0a'
         db 0x0d
         db 'Just 0d'
         db 0x0d, 0x0a
         db 0x00
+  HelloEnd:
 section stack align=16 vstart=0
   times 128 db 0
   StackEnd:
