@@ -58,7 +58,36 @@ YesLongMode:
   ;在开启64位之前，需要定义页表
   ;这个参考EDKII的代码，那是经过实战的
   ;我们使用内存的4级页表结构
+  mov eax, 0x80000000
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000001
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000002
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000003
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000004
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000005
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000006
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000007
+  cpuid
+  call PrintCPUIDResultHex
+  mov eax, 0x80000008
+  cpuid
+  call PrintCPUIDResultHex
 
+  
+  
   jmp InitialEnd
 ;不支持Long Mode/IA-32e，就按照正常的32位CPU初始化
 NoLongMode:
@@ -67,35 +96,42 @@ NoLongMode:
   call PrintString
   jmp InitialEnd
 InitialEnd:
-  jmp $
+  hlt
 
 ;打印CPUID结果
 PrintCPUIDResult:
-  push cx
-  push esi
+  push ecx
   call SaveCPUIDResult
-  mov cx, 4
-  StartPrintCPUIDResult:
+  mov esi, CPUIDResult
+  mov ecx, 52
+  call PrintNBytesAscii
+  pop ecx
+  ret
+PrintCPUIDResultHex:
+  push ecx
+  call SaveCPUIDResult
+  mov esi, CPUIDResult
+  mov ecx, 4
+  StartPrintCPUIDHex:
     call PrintOneRegister
     add esi, 13
-    loop StartPrintCPUIDResult
-  pop esi
-  pop cx
+    loop StartPrintCPUIDHex
+  pop ecx
   ret
 
 PrintOneRegister:
-  push cx
+  push ecx
   push esi;0
-  mov cx, 7
+  mov ecx, 7
   call PrintNBytesAscii
   add esi, 10;10
-  mov cx, 4
+  mov ecx, 4
   call PrintNBytesHexTop
   add esi, 1;
-  mov cx, 2
+  mov ecx, 2
   call PrintNBytesAscii
   pop esi
-  pop cx
+  pop ecx
   ret
 ;保存CPUID指令的查询结果
 SaveCPUIDResult:
@@ -107,7 +143,6 @@ SaveCPUIDResult:
 ;打印N个字节的16进制表示，从高到低
 PrintNBytesHexTop:
   push ax
-  push ecx
   push esi
   StartPrintByteHexTop:
     mov al, [esi]
@@ -116,13 +151,11 @@ PrintNBytesHexTop:
   loop StartPrintByteHexTop
   PrintNBytesHexTopEnd:
   pop esi
-  pop ecx
   pop ax
   ret
 ;打印N个字节的16进制表示
 PrintNBytesHex:
   push ax
-  push cx
   push esi
   StartPrintByteHex:
     mov al, [esi]
@@ -131,7 +164,6 @@ PrintNBytesHex:
   loop StartPrintByteHex
   PrintNBytesHexEnd:
   pop esi
-  pop cx
   pop ax
   ret
 ;打印AL寄存器的16进制形式
@@ -434,15 +466,19 @@ FlagsTip:
   of db 'of '
      db 'OF '
 CPUIDResult:
-  teax db 'EAX: 0x'
-  reax dd 0
-       db 0x0d, 0x0a
+  teax db 'EAX: 0x';0x00
+  reax dd 0 ;0x07
+       db '  ';0x11
   tebx db 'EBX: 0x'
   rebx dd 0
-       db 0x0d, 0x0a
+       db '  '
   tecx db 'ECX: 0x'
   recx dd 0
-       db 0x0d, 0x0a
+       db '  '
   tedx db 'EDX: 0x'
   redx dd 0
        db 0x0d, 0x0a
+
+  cpu_brnd0        db 0x0d,0x0a,'  ',0
+  cpu_brand  times 48 db 0
+  cpu_brnd1        db 0x0d,0x0a,0x0d,0x0a,0
