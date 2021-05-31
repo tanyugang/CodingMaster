@@ -1,6 +1,6 @@
 ;只有一个段，从0x7c00开始
 section Initial vstart=0x7c00
-;程序开始前的设置，先把段寄存器都置为0，后续所有地址都是相对0x00000的便宜
+;程序开始前的设置，先把段寄存器都置为0，后续所有地址都是相对0x00000的偏移
 ZeroTheSegmentRegister:
   xor ax, ax
   mov ds, ax
@@ -23,7 +23,7 @@ CheckInt13:
   jnz BootLoaderEnd
 ;寻找MBR分区表中的活动分区，看分区项第一个字节是否为0x80，最多4个分区
 SeekTheActivePartition:
-  ;分区表位于0x7c00+446=0x7c00+0x1be=0x7dbe的位置，使用si作为基地址
+  ;分区表位于0x7c00+446=0x7c00+0x1be=0x7dbe的位置，使用di作为基地址
   mov di, 0x7dbe
   mov cx, 4
   isActivePartition:
@@ -120,6 +120,8 @@ InitialBinFound:
     mov di, 0x9000
     call ReadDisk
     ;跳转到Initial.bin继续执行
+    mov si, GotoInitial
+    call PrintString
     jmp di
 ReadDisk:
   mov ah, 0x42
@@ -173,15 +175,15 @@ DiskAddressPacket:
   BlockHigh     dd 0
 ImportantTips:
   
-  BootLoaderStart   db 'Starting Boot'
+  BootLoaderStart   db 'Start Booting!'
                     db 0x0d, 0x0a
   PartitionFound    db 'Get Partition!'
                     db 0x0d, 0x0a
-  InitialFound      db 'Get Initial.bin!'
+  InitialFound      db 'Get Initial!'
                     db 0x0d, 0x0a
-  InitialLost       db 'Initial.bin lost!'
+  GotoInitial       db 'Go to Initial!'
                     db 0x0d, 0x0a
-  ShitHappens       db 'Error 0, Sorry, shit happens, boot failed!'
+  ShitHappens       db 'Error 0, Shit happens, check your code!'
                     db 0x0d, 0x0a
 ;结束为止
   times 446-($-$$) db 0
