@@ -40,6 +40,7 @@ NowUnderProtected:
   mov esi, TipProtectedMode
   mov dl, 0
   call PrintString  
+  mov edi, 0x00008000
 
 IsLongModeSupported:
   mov eax, 0x80000000
@@ -57,39 +58,67 @@ YesLongMode:
   call PrintString
   ;在开启64位之前，需要定义页表
   ;这个参考EDKII的代码，那是经过实战的
-  ;我们使用内存的4级页表结构
-  mov eax, 0x80000000
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000001
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000002
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000003
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000004
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000005
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000006
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000007
-  cpuid
-  call PrintCPUIDResultHex
-  mov eax, 0x80000008
-  cpuid
-  call PrintCPUIDResultHex
-
   
+
   
   jmp InitialEnd
 ;不支持Long Mode/IA-32e，就按照正常的32位CPU初始化
+SeekTheKernelElf:
+  cmp dword [edi], 'INIT'
+  jne nextFile
+  cmp dword [edi+4], 'IAL '
+  jne nextFile
+  cmp dword [edi+8], 'BIN '
+  jne nextFile
+  jmp KernelElfFound
+  nextFile:
+    cmp edi, 0x9000
+    ja NoKernelElf
+    add edi, 32
+    jmp SeekTheKernelElf
+KernelElfFound:
+  mov esi, TipKernelFound
+  mov dl, 0
+  call PrintString
+  ;获取文件长度
+  mov ax, [di+0x1c]
+  mov dx, [di+0x1e]
+  ;文件长度是字节为单位的，需要先除以512得到扇区数
+  mov cx, 512
+  div cx
+  ;如果余数不为0，则需要多读一个扇区
+  cmp dx, 0
+  je NoRemainder
+  ;ax是要读取的扇区数
+  inc ax
+  mov [BlockCount], ax
+  NoRemainder:
+    ;文件起始簇号，也是转为扇区号，乘以8即可
+    mov ax, [edi+0x1a]
+    sub ax, 2
+    mov cx, 8
+    mul cx
+    ;现在文件起始扇区号存在dx:ax，直接保存到ebx，这个起始是相对于DataBase 0x32,72
+    ;所以待会计算真正的起始扇区号还需要加上DataBase
+    and eax, 0x0000ffff
+    add ebx, eax
+    mov ax, dx
+    shl eax, 16
+    add ebx, eax
+    mov [BlockLow], ebx
+    mov word [BufferOffset], 0x9000
+    mov di, 0x9000
+;    call ReadDisk
+    ;跳转到Initial.bin继续执行
+    mov si, TipGotoKernel
+    mov dl, 0
+    call PrintString
+    jmp di
+NoKernelElf:
+  mov esi, TipNoKernelElf
+  mov dl, 0
+  call PrintString
+  hlt
 NoLongMode:
   mov esi, TipNoLongMode
   mov dl, 0
@@ -242,16 +271,6 @@ PrintNBytesAscii:
 
 ;打印一个普通字符，入参为al
 PrintByteAscii:
-  ;push ax
-  ;push di
-  ;call GetCursor
-  ;mov [es:di], al
-  ;add di, 2
-  ;call ShouldScreenRoll
-  ;call SetCursor
-  ;pop di
-  ;pop ax
-  ;ret
   push ax
   push dx
   push di
@@ -325,6 +344,7 @@ ClearOneLine:
     mov word [es:di], 0x0720
     add di, 2
     loop PrintBlackSpace
+  sub di, 160
   pop di
   ret
 
@@ -344,7 +364,7 @@ GetCursor:
   mov dx,0x3d5
   in al,dx                        ;低8位 
   add ax, ax
-  mov [CursorNow], ax 
+;  mov [CursorNow], ax 
   mov di, ax
   pop dx
   pop ax
@@ -355,7 +375,7 @@ SetCursor:
   push bx
   push ax
   
-  mov [CursorNow], di
+;  mov [CursorNow], di
   mov ax, di
   mov dx, 0
   mov bx, 2
@@ -444,7 +464,28 @@ TipNoLongMode    db 'No, Long Mode is not supported on this computer.'
                  db 0x0d, 0x0a, 0
 TipYesLongMode   db 'Yes! Long Mode is supported on this computer.'
                  db 0x0d, 0x0a, 0
-CursorNow dw 0
+TipKernelFound   db 'Yes! Kernel.elf is found, good for you!'
+                 db 0x0d, 0x0a, 0
+TipNoKernelElf   db 'Kernel.elf is not found on the disk, sad'
+                 db 0x0d, 0x0a, 0                 
+TipGotoKernel    db 'Now we are going to jump to Kernel.elf, yes!'
+                 db 0x0d, 0x0a, 0
+DiskAddressPacket:
+  ;包大小，目前恒等于16/0x10，0x00
+  PackSize      db 0x10
+  ;保留字节，恒等于0，0x01
+  Reserved      db 0
+  ;要读取的数据块个数，0x02
+  BlockCount    dw 0
+  ;目标内存地址的偏移，0x04
+  BufferOffset  dw 0
+  ;目标内存地址的段，让它等于0，0x06
+  BufferSegment dw 0
+  ;磁盘起始绝对地址，扇区为单位，这是低字节部分，0x08
+  BlockLow      dd 0
+  ;这是高字节部分，0x0c
+  BlockHigh     dd 0
+;CursorNow dw 0
 FlagsTip:
   flagtip db 'EFLAGS: '
   cf db 'cf '
@@ -479,6 +520,4 @@ CPUIDResult:
   redx dd 0
        db 0x0d, 0x0a
 
-  cpu_brnd0        db 0x0d,0x0a,'  ',0
-  cpu_brand  times 48 db 0
-  cpu_brnd1        db 0x0d,0x0a,0x0d,0x0a,0
+

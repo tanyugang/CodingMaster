@@ -110,7 +110,7 @@ PrintString:
   pop ax
   ret
   
-READSTART dd 1
+READSTART dd 10
 SECTORNUM db 1
 DESTMEN   dd 0x10000
 
